@@ -27,3 +27,10 @@ Thumbs.db
 *.log
 logs/
 .neon
+
+# --- Frontend (Node is downloaded by the Maven build into frontend/node) ---
+frontend/node/
+frontend/node_modules/
+
+# Local preview config (contains a throwaway dev-only setup token)
+.claude/launch.json

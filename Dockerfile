@@ -7,6 +7,9 @@ COPY mvnw pom.xml ./
 COPY .mvn .mvn
 RUN chmod +x mvnw && ./mvnw -B -ntp dependency:go-offline
 
+# Frontend sources (node/ and node_modules/ are excluded by .dockerignore; the Maven build downloads Node
+# and runs `npm ci` + `npm run build` into target/classes/static).
+COPY frontend frontend
 COPY src src
 # Tests already ran in CI (they need Docker, which isn't available inside this build).
 RUN ./mvnw -B -ntp -DskipTests package

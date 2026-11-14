@@ -26,11 +26,18 @@ spring:
   mvc:
     problemdetails:
       enabled: true              # RFC 9457 application/problem+json for errors
+  web:
+    resources:
+      cache:
+        cachecontrol:
+          no-cache: true         # index.html, manifest, icons: always revalidate (hashed /assets/** cache 1 year)
 
 server:
   port: ${PORT:8080}            # Render injects PORT
   shutdown: graceful
   forward-headers-strategy: framework   # trust X-Forwarded-* from the hosting proxy (HTTPS detection)
+  mime-mappings:
+    webmanifest: application/manifest+json   # PWA manifest
   servlet:
     session:
       # Sessions live in Postgres (spring.session above), so restarts and redeploys don't log anyone out.
