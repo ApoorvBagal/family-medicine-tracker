@@ -29,8 +29,8 @@ import com.familymeds.shared.config.NeonDatabaseUrl;
  *   <li>Neither: tests are skipped locally. <b>In CI they are never skipped</b>, so a broken Docker
  *       setup fails the build instead of silently passing.</li>
  * </ol>
- * Each test run (JVM) gets its <b>own empty schema</b>, {@code test_<epochSeconds>_<random>}, which
- * Flyway migrates from scratch and which is dropped at the end. Schemas left behind by crashed runs
+ * Each test class (Spring context) gets its <b>own empty schema</b>, {@code test_<epochSeconds>_<random>},
+ * which Flyway migrates from scratch, so classes never see each other's data. All are dropped at JVM exit. Schemas left behind by crashed runs
  * are dropped after a day. Only names matching that exact pattern are ever dropped.
  */
 public final class TestDatabase {
@@ -44,14 +44,11 @@ public final class TestDatabase {
     private static String jdbcUrl;
     private static String username;
     private static String password;
-    private static String schema;
+    private static boolean initialized;
+    private static final List<String> createdSchemas = new ArrayList<>();
+    public static final Pattern SCHEMA_NAME = Pattern.compile("test_\\d{10}_[0-9a-f]{8}");
 
     private TestDatabase() {
-    }
-
-    /** This run's schema; tests assert the app is really connected to it. */
-    public static synchronized String schema() {
-        return schema;
     }
 
     /** Used by {@code @EnabledIf}. */
@@ -61,9 +58,12 @@ public final class TestDatabase {
     }
 
     public static synchronized void register(DynamicPropertyRegistry registry) {
-        if (schema == null) {
+        if (!initialized) {
             initialize();
         }
+        String schema = "test_" + Instant.now().getEpochSecond() + "_"
+                + HexFormat.of().toHexDigits(ThreadLocalRandom.current().nextInt());
+        createdSchemas.add(schema);
         registry.add("spring.datasource.url", () -> jdbcUrl);
         // Set per connection with SQL: Neon's proxy ignores the JDBC "currentSchema" startup option.
         registry.add("spring.datasource.hikari.connection-init-sql", () -> "set search_path to " + schema);
@@ -86,10 +86,13 @@ public final class TestDatabase {
             username = container.getUsername();
             password = container.getPassword();
         }
-        schema = "test_" + Instant.now().getEpochSecond() + "_"
-                + HexFormat.of().toHexDigits(ThreadLocalRandom.current().nextInt());
+        initialized = true;
         dropStaleSchemas();
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> dropSchema(schema), "drop-test-schema"));
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            synchronized (TestDatabase.class) {
+                createdSchemas.forEach(TestDatabase::dropSchema);
+            }
+        }, "drop-test-schemas"));
     }
 
     private static void dropStaleSchemas() {

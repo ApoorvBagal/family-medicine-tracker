@@ -69,6 +69,11 @@ and permanently once done).
 | POST | `/api/v1/auth/setup` | public + `SETUP_TOKEN`, once |
 | POST | `/api/v1/auth/login` / `logout` | public / logged in |
 | GET | `/api/v1/auth/me` | logged in |
+| GET/POST | `/api/v1/medicines` (`?q=`, `?archived=`) | logged in |
+| GET/PUT | `/api/v1/medicines/{id}` (PUT needs `If-Match: "v<version>"`) | logged in |
+| POST | `/api/v1/medicines/{id}/archive`, `/restore` | logged in |
+| GET | `/api/v1/medicines/{id}/history` | logged in |
+| GET | `/v3/api-docs` (OpenAPI JSON) | logged in |
 
 Errors are `application/problem+json` with a stable `code` (e.g. `INVALID_CREDENTIALS`, `TOO_MANY_ATTEMPTS`).
 

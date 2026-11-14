@@ -27,6 +27,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     ResponseEntity<ProblemDetail> handleApi(ApiException e) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(e.status(), e.getMessage());
         problem.setProperty("code", e.code());
+        e.properties().forEach(problem::setProperty);
         HttpHeaders headers = new HttpHeaders();
         if (e.retryAfter() != null) {
             headers.set(HttpHeaders.RETRY_AFTER, Long.toString(Math.max(1, e.retryAfter().toSeconds())));
@@ -54,6 +55,22 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         problem.setProperty("code", "VALIDATION_FAILED");
         problem.setProperty("errors", errors);
         return ResponseEntity.badRequest().body(problem);
+    }
+
+    /**
+     * Spring's built-in errors (malformed JSON, unknown enum value, bad id in the URL, 404, 405…) also get
+     * a stable {@code code}, derived from the status (BAD_REQUEST, NOT_FOUND, METHOD_NOT_ALLOWED…).
+     */
+    @Override
+    protected ResponseEntity<Object> handleExceptionInternal(Exception ex, Object body, HttpHeaders headers,
+            HttpStatusCode statusCode, WebRequest request) {
+        ResponseEntity<Object> response = super.handleExceptionInternal(ex, body, headers, statusCode, request);
+        if (response != null && response.getBody() instanceof ProblemDetail problem
+                && (problem.getProperties() == null || !problem.getProperties().containsKey("code"))) {
+            HttpStatus status = HttpStatus.resolve(statusCode.value());
+            problem.setProperty("code", status != null ? status.name() : "HTTP_" + statusCode.value());
+        }
+        return response;
     }
 
     private static Map<String, String> toError(FieldError error) {

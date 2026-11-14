@@ -45,7 +45,7 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/auth/setup-status", "/api/v1/auth/csrf").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/setup", "/api/v1/auth/login").permitAll()
-                        .requestMatchers("/api/**").authenticated()
+                        .requestMatchers("/api/**", "/v3/api-docs", "/v3/api-docs/**").authenticated()
                         .anyRequest().permitAll())
                 .csrf(csrf -> csrf.spa().csrfTokenRepository(csrfTokenRepository))
                 .formLogin(AbstractHttpConfigurer::disable)

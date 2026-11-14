@@ -45,7 +45,15 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
-        <!-- Database: plain JDBC for M0; JPA arrives in M2 when we have real entities -->
+        <!-- OpenAPI description of the REST API at /v3/api-docs (JSON only, behind login; no Swagger UI,
+             whose inline styles the strict CSP would block) -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-api</artifactId>
+            <version>3.2.0</version>
+        </dependency>
+
+        <!-- Database: plain SQL via JdbcClient (explicit queries and locking; no JPA) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-jdbc</artifactId>
