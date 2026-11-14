@@ -1,6 +1,26 @@
-# Family Medicine Stock Tracker — Design (v0.1, draft for approval)
+# Family Medicine Stock Tracker — Design (v0.2)
 
-Status: **Proposed**. Nothing here is built yet. Items marked **[DECISION]** need your approval before Milestone 0.
+Status: **v0.1 approved 2026-11-14; revised the same day (v0.2) after new constraints.** Read the revision summary first: where it conflicts with older sections, the revision wins, and the affected sections below have been updated.
+
+## Revision v0.2 (2026-11-14): what changed and why
+
+New facts from the owner:
+- **Android phones only**, family use, not public.
+- **Only one person, the father, takes regular medication**: 4–5 regular medicines.
+- **Updates (restocks, recounts) will be done from one device**; others mainly need visibility and alerts.
+- **Warn when about 5 days of stock are left.**
+- **No Docker Desktop and no paid domain.**
+
+| # | Change | Reason |
+|---|---|---|
+| R1 | **Frontend: installable web app (PWA) built with React + Vite and served by the Spring Boot app itself**, at one URL: `https://family-medicine-tracker.onrender.com`. Cloudflare Pages is dropped. (Revises D2.) | No domain means a separate frontend host would be a different site from the API, which complicates cookie login. One origin needs no CORS and no cross-site cookies. Android installs PWAs to the home screen. The build downloads its own Node, so no system Node upgrade is needed. |
+| R2 | **No native Android app.** | It would mean a second codebase and reinstalling the APK on each phone for every update. A PWA gives an app icon and full-screen use, and later web push notifications on Android. |
+| R3 | **No Docker locally** (D10). Local development uses a **Neon `dev` branch**. Real-database tests run in CI (Testcontainers on GitHub's runners) and optionally locally against a throwaway **Neon `test` branch** via an environment variable. | Owner choice. The embedded-Postgres library alternative was rejected: its last release was in 2024 and it has no Postgres 18. |
+| R4 | **Runway-based low-stock alerts** (D11): a medicine with a **daily dose** alerts when its **estimated days of stock left ≤ `warn_days` (default 5)**. Medicines without a daily dose keep the minimum-stock threshold. The "days of stock left" forecast moves from post-MVP into the MVP. | A fixed tablet count means very different things for different doses. Alerting on days left gives a predictable 5-day window to restock. |
+| R5 | **Estimated stock is display and alerting only.** It never writes consumption to the ledger. Recorded movements (doses, purchases, recounts) are the truth, and each one resets the estimate. | Keeps the brief's rule: never assume a dose was taken. It also means alerts still arrive if nobody logs every dose. |
+| R6 | **Daily job moves earlier**, from M6 to M5. | Runway shrinks every day without any writes, so the daily re-check is needed for low-stock alerts, not just for expiry. |
+| R7 | **Email without a domain:** alerts are sent through an HTTP email API from a verified Gmail sender address. First messages may land in spam until marked "not spam". | Accepted risk. Revisit if it proves unreliable. |
+| R8 | **Decided (D12): one owner login + alert-recipient emails.** Family members don't log in; they receive alert emails. **Dropped from the MVP:** invitations, roles, member management, the "I'll buy it" claim (D5). **Kept:** the `household` table (timezone, defaults, scoping) with a single owner, so logins for others can be added later without migrating data. **New:** `alert_recipient` (`id`, `household_id`, `name`, `email citext`, `unsubscribe_token_hash`, `active`, `created_at`; unique per household + email), managed by the owner (`GET/POST/DELETE /api/v1/alert-recipients`). Every email carries a one-click unsubscribe link. **Bootstrap:** registration works only while no user exists **and** with a `SETUP_TOKEN` (env var), then closes for good. That avoids a race where a stranger registers first. | Updates come from one device, and the others only need to know when to buy. This removes the most complex multi-user parts of M1 and M4. |
 
 ---
 
@@ -120,7 +140,7 @@ erDiagram
 
 **invitation** — `id`, `household_id`, `email citext`, `role`, `token_hash` (SHA-256 of a random 256-bit token; the token itself is never stored), `invited_by`, `expires_at`, `accepted_at`, `revoked_at`, `created_at`. Partial unique index: one open invitation per (household, email).
 
-**medicine** — `id`, `household_id`, `name`, `brand_name`, `strength` (free text, e.g. "500 mg"), `dosage_form` (enum: TABLET, CAPSULE, SYRUP, DROPS, INHALER, CREAM, INJECTION, OTHER), `unit` (enum: TABLET, CAPSULE, ML, BOTTLE, STRIP, TUBE, PIECE, OTHER), `min_threshold numeric(10,2) >= 0`, `storage_location`, `notes`, `restock_claimed_by`, `restock_claimed_at`, `archived_at`, `version bigint` (optimistic lock), `created_by`, `created_at`, `updated_at`.
+**medicine** — `id`, `household_id`, `name`, `brand_name`, `strength` (free text, e.g. "500 mg"), `dosage_form` (enum: TABLET, CAPSULE, SYRUP, DROPS, INHALER, CREAM, INJECTION, OTHER), `unit` (enum: TABLET, CAPSULE, ML, BOTTLE, STRIP, TUBE, PIECE, OTHER), `min_threshold numeric(10,2) >= 0`, `storage_location`, `notes`, `daily_dose numeric(10,2) NULL CHECK (daily_dose > 0)` (units per day, for regular medicines; v0.2), `warn_days int NOT NULL DEFAULT 5 CHECK (warn_days >= 0)` (v0.2), `restock_claimed_by`, `restock_claimed_at`, `archived_at`, `version bigint` (optimistic lock), `created_by`, `created_at`, `updated_at`.
 - Duplicate guard: `UNIQUE (household_id, lower(trim(name)), lower(coalesce(trim(strength),'')), dosage_form) WHERE archived_at IS NULL`.
 
 **stock_lot** (a batch) — `id`, `household_id`, `medicine_id`, `expiry_date date NULL` (NULL = no expiry recorded, counted as usable), `quantity numeric(10,2) CHECK (quantity >= 0)`, `label` (optional, e.g. "new strip from Apollo"), `created_at`, `depleted_at`.
@@ -187,7 +207,15 @@ Two family members tap "took 1 tablet" on the same medicine at the same moment. 
 
 ### Alerts: a state machine plus a transactional outbox
 
-- After every stock movement, inside the **same transaction**, compute the new status: `OUT` (usable = 0), `LOW` (usable ≤ threshold), else `OK`. If the status changed and the notification rules allow it (cooldown, e.g. no LOW→OK→LOW flapping emails within 6 h), insert a `notification_outbox` row.
+- **Runway (v0.2).** For a medicine with `daily_dose`:
+  - `anchor` = usable quantity right after the latest stock movement, on `anchorDate` (household timezone).
+  - `estimated = max(0, anchor − daily_dose × (today − anchorDate))`, counting whole calendar days, so a dose logged every day keeps the estimate equal to the recorded stock.
+  - `daysLeft = floor(estimated / daily_dose)`, and `runOutDate = today + daysLeft`.
+  - The API returns `recordedQuantity`, `estimatedQuantity`, `daysLeft` and `runOutDate`. The UI labels the estimate as such.
+- After every stock movement, inside the **same transaction**, and again in the daily job, compute the new status:
+  - `OUT`: usable = 0, or a daily-dose medicine with `estimated` = 0.
+  - `LOW`: `daysLeft ≤ warn_days` (default 5) for daily-dose medicines, or usable ≤ `min_threshold` for the others.
+  - `OK`: otherwise. If the status changed and the notification rules allow it (cooldown, e.g. no LOW→OK→LOW flapping emails within 6 h), insert a `notification_outbox` row.
 - **Why an outbox:** the email must go out *only if* the stock change was committed, and the change must not be rolled back because the email server was slow. After commit, an `@TransactionalEventListener(AFTER_COMMIT)` tries to send asynchronously. Failures are retried with backoff by the daily job and on startup.
 - **Daily job** (§6): recompute status for every medicine (catches batches that expired overnight), queue expiry-soon and expired notifications (deduped through `dedupe_key`), and retry failed outbox rows.
 - Email goes through an `EmailSender` interface with an **HTTP API** provider (not SMTP — see §6) and a log-only implementation for local development and tests.
@@ -266,7 +294,23 @@ Status codes: 200/201, 204, 400 (validation, with a field error list), 401, 403,
 
 ## 6. Deployment architecture (free tier first)
 
-### Recommended setup [DECISION]
+### Revised setup (v0.2, in use)
+
+```
+ Family Android phones (installed PWA) ──HTTPS──► family-medicine-tracker.onrender.com
+                                                   Render free web service (Docker, Singapore)
+                                                   Spring Boot: REST API /api/v1 + React build as static files
+                                                         │ JDBC, TLS verify-full, direct (unpooled)
+                                                         ▼
+                                                   Neon Postgres 18 (Singapore): branches production / dev / test
+ GitHub Actions: CI on every push → Deploy on main (Render deploy hook → wait for tested commit → smoke test)
+                 cron: daily job (runway + expiry + outbox retry), nightly encrypted pg_dump
+ Email: HTTP email API, verified Gmail sender (no domain)
+```
+
+There's no custom domain and no separate frontend host. The superseded v0.1 plan is kept below for reference.
+
+### Original setup (v0.1, superseded by v0.2 above)
 
 ```
                  ┌──────────── your domain (≈ $10/yr, the one paid item) ───────────┐
@@ -330,17 +374,17 @@ Each milestone ends **deployed, tested, and recorded in PROJECT_STATE.md**. Depl
 | M | Goal | Deliverables | Done when |
 |---|---|---|---|
 | **M0** | Walking skeleton, deployed | Repo, Spring Boot + Actuator + Flyway (empty `V1`), docker-compose Postgres, multi-stage Dockerfile, CI workflow, Render + Neon set up, `/actuator/health` public over HTTPS | You can push a commit → CI passes → it's live. A test row survives a manual Render restart **and** a redeploy |
-| **M1** | Auth + household bootstrap | Users, households, members, Spring Security sessions in JDBC, CSRF, register/login/logout/me, problem+json errors. React skeleton on Cloudflare Pages with a login page. Domain + `app.`/`api.` set up | You can log in from your phone on the deployed site. Sessions survive a backend restart. Security tests pass (401s, CSRF, rate limit) |
+| **M1** | Auth + household bootstrap + PWA shell | Neon `dev`/`test` branches for local work. Users, households, members, Spring Security sessions in JDBC, CSRF, register/login/logout/me, problem+json errors. React + Vite PWA **served by Spring Boot** (built via the Maven build), with a login page and a "waking up" state | You can log in from your Android phone on the deployed site and install it to the home screen. Sessions survive a backend restart. Security tests pass (401s, CSRF, rate limit) |
 | **M2** | Medicines | CRUD, duplicate guard, archive, optimistic locking, audit_event, OpenAPI docs. Medicine list + form UI | Duplicate → friendly 409. Stale edit → 409. A cross-household IDOR test returns 404 |
 | **M3** | Stock ledger (the core) | Batches, purchase/consume/correct/dispose/reverse, idempotency, row locking, usable vs expired quantities. Medicine detail screen with 2-tap consume and a recount flow | **Concurrency test passes** (N threads, no lost updates). Idempotency replay test passes. Negative stock is impossible. Ledger totals match batch totals |
-| **M4** | Email + invitations | EmailSender (HTTP API + log fake), outbox, invitations, accept flow, password reset, roles enforced | You invite a family member's real email, they join from their own phone, and both of you see the same stock |
-| **M5** | Low-stock alerts | alert_state machine, cooldown, per-user opt-out, after-commit sending + retry | Crossing the threshold sends exactly one email, replenishing sends one "back in stock", flapping is suppressed. Tests cover each transition |
-| **M6** | Expiry + daily job | Expiry-soon/expired logic in the household timezone, daily job endpoint, GitHub Actions cron, "last run" indicator | A batch with yesterday's expiry shows as expired, isn't counted as usable, and triggers one email |
+| **M4** | Email + alert recipients (v0.2) | EmailSender (HTTP API + log fake), outbox, alert recipients CRUD, one-click unsubscribe, password reset for the owner | A test alert reaches each family member's real inbox, and their unsubscribe link works |
+| **M5** | Low-stock alerts + daily job | `daily_dose`/`warn_days`, runway estimate (days left, run-out date), alert_state machine, cooldown, per-user opt-out, after-commit sending + retry. Daily job endpoint + GitHub Actions cron (moved here from M6) | A daily-dose medicine reaching ≤ 5 days left sends exactly one email, **even with no writes** (via the daily job). Replenishing sends one "back in stock". Flapping is suppressed. Tests cover each transition and the estimate maths |
+| **M6** | Expiry | Expiry-soon/expired logic in the household timezone, added to the daily job, plus a "last run" indicator | A batch with yesterday's expiry shows as expired, isn't counted as usable, and triggers one email |
 | **M7** | Dashboard + PWA polish | `/dashboard`, restock list + "I'll buy it", installable PWA, large touch targets, "waking up" state | Usability test: a non-technical family member logs a dose and finds a low medicine without help |
 | **M8** | Production readiness | Encrypted nightly backup + **restore drill**, Sentry, structured logs, Dependabot, a security review pass, a runbook (`docs/RUNBOOK.md`: deploy, roll back, restore, rotate secrets) | You've restored production data into a clean database from a backup |
 | **M9** | Family beta | Enter the real medicines, do the first physical count, set `REGISTRATION_ENABLED=false`, two weeks of use, then a review | The success criteria in §1 are tracked |
 
-Post-MVP candidates, in order of value: **days-of-stock forecast** (estimated daily usage → "runs out around 3 Dec", and alerts based on pharmacy lead time instead of a fixed threshold), schedules with *confirmed* doses, spending, barcodes, WhatsApp.
+Post-MVP candidates, in order of value: **Android web push notifications** (alongside or instead of email), schedules with *confirmed* doses, spending, barcodes, WhatsApp. (The days-of-stock forecast moved into the MVP in v0.2, as M5.)
 
 ---
 
@@ -361,7 +405,9 @@ Post-MVP candidates, in order of value: **days-of-stock forecast** (estimated da
 
 ---
 
-## 9. Decisions needing your approval
+## 9. Decisions
+
+Current status of every decision is tracked in `PROJECT_STATE.md`. v0.2 revised D2 (frontend served by Spring Boot, no domain) and added D10 (no local Docker) and D11 (runway alerts, warn at ≤ 5 days). The original v0.1 list follows.
 
 1. **D1 — Batch (lot) model** for stock and expiry (C1). *Recommended.*
 2. **D2 — Frontend:** React + Vite SPA on Cloudflare Pages **with a custom domain** (~$10/yr). Alternative: serve the SPA from Spring Boot, with no domain needed.
