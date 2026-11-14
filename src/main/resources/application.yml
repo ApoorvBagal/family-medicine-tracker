@@ -50,6 +50,16 @@ server:
 app:
   # One-time secret needed to create the owner account (D12). Set on Render; can be removed after setup.
   setup-token: ${SETUP_TOKEN:}
+  # Public address, used in email links.
+  base-url: ${APP_BASE_URL:http://localhost:8080}
+  # Bearer token GitHub Actions cron sends to POST /internal/jobs/daily. Empty = endpoint disabled (404).
+  job-token: ${JOB_TOKEN:}
+  email:
+    # log = write emails to the log only (default, local + tests); brevo = send via Brevo's HTTP API.
+    provider: ${EMAIL_PROVIDER:log}
+    brevo-api-key: ${BREVO_API_KEY:}
+    from: ${EMAIL_FROM:}          # the Gmail address verified as a sender in Brevo
+    from-name: ${EMAIL_FROM_NAME:Family medicines}
 
 management:
   endpoints:

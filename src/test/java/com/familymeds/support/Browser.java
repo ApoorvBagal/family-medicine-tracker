@@ -74,6 +74,14 @@ public class Browser {
         return perform(request, true);
     }
 
+    /** DELETE with the CSRF header. */
+    public ResultActions delete(String path) throws Exception {
+        if (!cookies.containsKey("XSRF-TOKEN")) {
+            get("/api/v1/auth/csrf");
+        }
+        return perform(MockMvcRequestBuilders.delete(path), true);
+    }
+
     /** POST without a CSRF header: what a malicious cross-site form could send. */
     public ResultActions postWithoutCsrf(String path, String json) throws Exception {
         return perform(MockMvcRequestBuilders.post(path).contentType(MediaType.APPLICATION_JSON).content(json), false);

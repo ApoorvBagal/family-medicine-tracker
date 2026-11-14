@@ -42,6 +42,10 @@ export interface Medicine extends MedicineInput {
   id: string
   usableQuantity: number
   expiredQuantity: number
+  /** Runway estimate (M5): counts the daily dose since the last stock entry. */
+  estimatedQuantity: number | null
+  daysLeft: number | null
+  alertStatus: 'OK' | 'LOW' | 'OUT' | null
   archived: boolean
   archivedAt: string | null
   version: number

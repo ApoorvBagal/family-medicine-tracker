@@ -15,6 +15,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.familymeds.alerts.AlertService;
+import com.familymeds.alerts.Runway;
 import com.familymeds.identity.AppUserPrincipal;
 import com.familymeds.identity.IdentityRepository;
 import com.familymeds.shared.web.ApiException;
@@ -35,7 +37,8 @@ import com.familymeds.shared.web.ApiException;
 @Service
 public class StockService {
 
-    public record StockLevel(BigDecimal usable, BigDecimal expired, List<StockRepository.Lot> lots, LocalDate today) {
+    public record StockLevel(BigDecimal usable, BigDecimal expired, List<StockRepository.Lot> lots, LocalDate today,
+            Runway runway) {
     }
 
     public record Result(StockRepository.Movement movement, StockLevel stock, boolean replayed) {
@@ -45,8 +48,11 @@ public class StockService {
     private final MedicineService medicines;
     private final IdentityRepository identity;
     private final Clock clock;
+    private final AlertService alerts;
 
-    public StockService(StockRepository stock, MedicineService medicines, IdentityRepository identity, Clock clock) {
+    public StockService(StockRepository stock, MedicineService medicines, IdentityRepository identity, Clock clock,
+            AlertService alerts) {
+        this.alerts = alerts;
         this.stock = stock;
         this.medicines = medicines;
         this.identity = identity;
@@ -74,7 +80,8 @@ public class StockService {
                 usable = usable.add(lot.quantity());
             }
         }
-        return new StockLevel(usable, expired, lots, today);
+        Runway runway = alerts.runway(user.householdId(), medicines.get(user, medicineId), usable);
+        return new StockLevel(usable, expired, lots, today, runway);
     }
 
     public Map<UUID, BigDecimal[]> totals(AppUserPrincipal user) {
@@ -262,14 +269,17 @@ public class StockService {
         for (Change c : changes) {
             after.add(stock.changeLot(user.householdId(), c.lotId(), c.delta()));
         }
-        StockLevel level = level(user, medicineId, today);
+        BigDecimal usableAfter = level(user, medicineId, today).usable();
         OffsetDateTime now = OffsetDateTime.now(clock);
         OffsetDateTime when = occurredAt == null || occurredAt.isAfter(now) ? now : occurredAt;
         UUID movementId = stock.insertMovement(user.householdId(), medicineId, type, note, user.userId(), when,
-                level.usable(), reverses, key);
+                usableAfter, reverses, key);
         for (int i = 0; i < changes.size(); i++) {
             stock.insertLine(movementId, changes.get(i).lotId(), changes.get(i).delta(), after.get(i));
         }
+        // Same transaction, medicine still locked: a status change queues its email, sent after commit (M5).
+        alerts.evaluate(user.householdId(), medicineId);
+        StockLevel level = level(user, medicineId, today);
         return new Result(stock.movement(user.householdId(), movementId).orElseThrow(), level, false);
     }
 }

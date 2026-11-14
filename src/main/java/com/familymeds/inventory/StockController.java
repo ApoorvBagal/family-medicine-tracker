@@ -66,8 +66,10 @@ public class StockController {
     public record LotView(UUID id, LocalDate expiryDate, BigDecimal quantity, String label, boolean expired) {
     }
 
+    /** {@code estimatedQuantity}/{@code daysLeft}: runway estimate (M5), never written to the ledger. */
     public record StockView(BigDecimal usableQuantity, BigDecimal expiredQuantity, LocalDate nextExpiry,
-            List<LotView> lots) {
+            List<LotView> lots, BigDecimal estimatedQuantity, Integer daysLeft, LocalDate runOutDate,
+            String alertStatus) {
 
         static StockView of(StockService.StockLevel level) {
             List<LotView> lots = level.lots().stream()
@@ -75,7 +77,9 @@ public class StockController {
                     .toList();
             LocalDate next = lots.stream().filter(l -> !l.expired() && l.expiryDate() != null)
                     .map(LotView::expiryDate).findFirst().orElse(null);
-            return new StockView(level.usable(), level.expired(), next, lots);
+            var r = level.runway();
+            return new StockView(level.usable(), level.expired(), next, lots, r.estimated(), r.daysLeft(),
+                    r.runOutDate(), r.status().name());
         }
     }
 

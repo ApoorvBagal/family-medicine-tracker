@@ -402,3 +402,7 @@ ul.plain li.undone {
   margin: 1.5rem 0 0;
   font-size: 1.1rem;
 }
+
+.badge {
+  color: var(--error-text);
+}

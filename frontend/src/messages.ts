@@ -36,6 +36,16 @@ export function messageFor(error: unknown): string {
       return 'Setup was already completed. Please log in.'
     case 'PASSWORD_TOO_LONG':
       return 'That password is too long.'
+    case 'RECIPIENT_EXISTS':
+      return 'That email is already on the list.'
+    case 'RECIPIENT_IS_OWNER':
+      return 'That’s your own email: you already get alerts.'
+    case 'TOO_MANY_RECIPIENTS':
+      return 'Up to 10 people can get alerts.'
+    case 'TEST_EMAIL_TOO_SOON':
+      return 'A test email was just sent. Wait a couple of minutes.'
+    case 'UNSUBSCRIBE_LINK_INVALID':
+      return 'This link is no longer valid. You may already be off the list.'
     case 'DUPLICATE_MEDICINE':
       return 'This medicine is already in the list (same name, strength and form).'
     case 'STALE_VERSION':

@@ -60,6 +60,10 @@ Production (Render) sets `SPRING_PROFILES_ACTIVE=prod`, `DATABASE_URL_UNPOOLED` 
 account exists, `SETUP_TOKEN` (one-time secret for `POST /api/v1/auth/setup`; setup is refused without it,
 and permanently once done).
 
+Alerts (M5): `EMAIL_PROVIDER` (`log` = only log, default; `brevo`), `BREVO_API_KEY`, `EMAIL_FROM` (Gmail address
+verified in Brevo), `EMAIL_FROM_NAME`, `APP_BASE_URL` (used in email links), `JOB_TOKEN` (bearer token for the daily
+job; the GitHub secret `JOB_TOKEN` must match).
+
 ## API (so far)
 
 | Method | Path | Auth |
@@ -77,6 +81,10 @@ and permanently once done).
 | GET | `/api/v1/medicines/{id}/stock`, `/movements` | logged in |
 | POST | `/api/v1/medicines/{id}/purchases`, `/consumptions`, `/recounts`, `/disposals` (need `Idempotency-Key`) | logged in |
 | POST | `/api/v1/stock-movements/{id}/reversal` (undo; needs `Idempotency-Key`) | logged in |
+| GET, POST | `/api/v1/alert-recipients`; DELETE `/api/v1/alert-recipients/{id}` | logged in |
+| POST | `/api/v1/alerts/test-email`; GET `/api/v1/alerts/status` | logged in |
+| POST | `/api/v1/unsubscribe?token=` (link in alert emails) | public, token |
+| POST | `/internal/jobs/daily` (GitHub Actions cron, `Daily check` workflow) | `Bearer JOB_TOKEN` |
 
 Errors are `application/problem+json` with a stable `code` (e.g. `INVALID_CREDENTIALS`, `TOO_MANY_ATTEMPTS`).
 

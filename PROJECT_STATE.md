@@ -3,7 +3,7 @@
 _Last updated: 2026-11-14_
 
 ## Current phase
-**M2 - Medicines (2026-11-14).** M0 and M1 complete and live at https://family-medicine-tracker.onrender.com (push to `main` → CI → automatic deploy → smoke test). M2 live. **M3 (stock) built on branch `m3/stock`.** Small open M0 items: record startup + cold-start times.
+**M5 - Low-stock alerts (2026-11-14).** M0 and M1 complete and live at https://family-medicine-tracker.onrender.com (push to `main` → CI → automatic deploy → smoke test). M2 and M3 (stock) live. **M5 (alerts) built on branch `m5/alerts`**; M4 (password reset etc.) comes after. Small open M0 items: record startup + cold-start times.
 
 ## Decisions
 | ID | Decision | Status |
@@ -20,6 +20,7 @@ _Last updated: 2026-11-14_
 | D10 | No local Docker: local dev on a Neon `dev` branch; real-DB tests in CI (Testcontainers) + optional local run against a Neon `test` branch | 2026-11-14 (owner choice) |
 | D11 | Runway alerts: medicines with `daily_dose` alert when estimated days left ≤ `warn_days` (default **5**); others use `min_threshold`. Estimate is display/alerting only, never written to the ledger. Daily job moves to M5 | 2026-11-14 (owner: warn at 5 days) |
 | D12 | **One owner login + alert-recipient emails** (no invitations/roles in MVP; household table kept for later). Registration needs `SETUP_TOKEN` and closes after the first user. Supersedes D5 ("I'll buy it" dropped) and the invitation parts of D4 | Approved 2026-11-14 |
+| D16 | M5 before M4: alert emails need only the email sender + recipients, so those parts of M4 moved into M5; password reset / "sign out everywhere" stay in M4. Email provider **Brevo** (HTTP API, verified Gmail sender: free, no domain; Resend needs a domain to email others). Unsubscribe tokens stored as is (not hashed, unlike R8): the link is rebuilt for each email and queued emails contain it anyway; a leak only allows unsubscribing | 2026-11-14 |
 | D9 | DB connection: explicit `DB_URL` wins; else Neon's `DATABASE_URL_UNPOOLED` (env var or git-ignored `.env.local`) converted to JDBC with `sslmode=verify-full`. Direct, not pooled (Flyway needs session features) | 2026-11-14 |
 
 ## Completed
@@ -91,6 +92,19 @@ _Last updated: 2026-11-14_
 - Tests: `StockIntegrationTest` (14: FEFO split across batches, half tablets, expired never usable + disposal, already-expired purchase refused, retry applied once + key reuse, missing key, recount conflict/up/down/unchanged, recount from zero, undo once + kept in history + undo-of-undo refused, undo of used purchase refused, archived refused, **other household 404 everywhere**, list totals, invalid amounts) - all check **ledger total == batch total**. `StockConcurrencyTest` (3, real threads + start gate: 8x5 simultaneous doses all counted; 8 phones vs 5 tablets -> exactly 5 succeed, never below 0; same request x8 at once -> applied once).
 - **Mutation check**: with `FOR UPDATE` removed, 2 of 3 concurrency tests fail (stock driven below zero -> DB CHECK error; duplicate retry -> unique-key error). The plain-doses test still passes because each batch update is an atomic `quantity = quantity + delta`; the lock protects the check-then-act steps. Lock restored.
 - Results: `.\scripts\test-with-neon.ps1` -> **62 tests, 0 failures, 0 skipped**. Manual browser test against Neon `dev`: bought 60 (exp 08/2027) -> "60 usable - about 20 days - next expiry 08/2027"; dose 1 -> 59; recount 58 -> 58; dose 100 -> "Not enough usable stock: only 58 left."; list shows stock; only deliberate errors in the console. Undo not clicked in the browser (confirmation dialog), covered by 4 API tests.
+- Production (merge `e65cf63`, PR #10): CI + Deploy green; live `app.commit` = `e65cf63`; `/medicines/{id}/stock` and `/movements` -> 401 without login.
+
+### M5 - Low-stock alerts (2026-11-14, branch `m5/alerts`)
+- Flyway **V5**: `alert_recipient` (family emails, random unsubscribe token, `UNIQUE(household, email)`), `medicine_alert_state` (status OK/LOW/OUT, last LOW/OUT email + time, `restock_pending`), `notification_outbox` (one row per recipient; attempts, next try, last error), `job_run`.
+- `Runway` (pure): `estimated = max(0, usable - dose x whole days since the last stock entry)` (household timezone); `daysLeft = floor(estimated / dose)`; LOW at `daysLeft <= warnDays`, OUT at 0; no daily dose -> min threshold. Never written to the ledger. Shown in the list, the stock panel ("Estimated N now...") and API (`estimatedQuantity`, `daysLeft`, `runOutDate`, `alertStatus`).
+- `AlertService.evaluate` runs inside every stock change (same transaction, medicine row locked) and in the daily job (locks each medicine). Emails on OK->LOW, ->OUT, and "Restocked" back to OK only after a LOW/OUT email; OUT->LOW no email; same LOW/OUT again within 6 h suppressed. No alerts before the first stock entry or for archived medicines.
+- Outbox: queued in the stock transaction, sent after commit on a background virtual thread; claimed with `FOR UPDATE SKIP LOCKED`; failures retried with growing delays (5 min ... ~21 h, max 10) by the daily job. At-least-once.
+- `EmailSender`: `log` (default, local/tests) or `brevo` (`EMAIL_PROVIDER=brevo`, `BREVO_API_KEY`, `EMAIL_FROM`; startup fails if missing). Text + escaped HTML, `List-Unsubscribe` (+ one-click) header for recipients; the owner's emails have no unsubscribe link.
+- API: `GET/POST /api/v1/alert-recipients`, `DELETE /api/v1/alert-recipients/{id}` (max 10; owner's own email refused), `POST /api/v1/alerts/test-email` (2-minute gap), `GET /api/v1/alerts/status` (last daily check, pending emails). Public: `POST /api/v1/unsubscribe?token=` (POST only, so mail link scanners can't unsubscribe; no CSRF/session; repeat OK) and `POST /internal/jobs/daily` (`Authorization: Bearer JOB_TOKEN`, constant-time compare; 404 when unset); other `/internal/**` denied.
+- `.github/workflows/daily.yml`: cron 02:30 UTC (08:00 IST) + manual button; retries while Render wakes; fails on token mismatch or job errors.
+- UI: "Alert emails" section (people, add/remove, test email, last daily check, warning when sending is off), LOW badge in the list, low/run-out warning + estimate note on the stock panel, `/?unsubscribe=<token>` page with a confirm button.
+- Tests: `RunwayTest` (6), `AlertIntegrationTest` (11: 5 days -> one LOW email then Restocked; email text + owner without unsubscribe link; daily job estimates unlogged doses, idempotent re-run, OUT, ledger untouched; hovering suppressed; min threshold; no alerts before first entry / archived; failed send kept + retried; recipients + own unsubscribe link, GET doesn't unsubscribe, POST without login works, unsubscribed gets nothing, other household 404; job token 401/200 + status; login required; test email + rate limit). Full suite **79 tests, 0 failures** (`.\scripts\test-with-neon.ps1`). Browser check on `dev`: list shows estimate, recipient added, test email logged for owner + recipient, unsubscribe page shows the invalid-link message.
+- **To switch on in production** (owner): Brevo account + verified Gmail sender + API key; on Render set `EMAIL_PROVIDER=brevo`, `BREVO_API_KEY`, `EMAIL_FROM`, `APP_BASE_URL=https://family-medicine-tracker.onrender.com`, `JOB_TOKEN`; GitHub secret `JOB_TOKEN` (same value).
 
 ## Tooling installed (2026-11-14)
 - Neon CLI `neon@9.5.0` (global npm, installed by owner), signed in.

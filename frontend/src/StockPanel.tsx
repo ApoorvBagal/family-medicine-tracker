@@ -83,8 +83,8 @@ export function StockPanel({ medicine }: { medicine: Medicine }) {
 
   if (!stock) return error ? <p className="error" role="alert">{messageFor(error)}</p> : <div className="spinner" />
 
-  const daysLeft =
-    medicine.dailyDose && stock.usableQuantity > 0 ? Math.floor(stock.usableQuantity / medicine.dailyDose) : null
+  const daysLeft = stock.usableQuantity > 0 ? stock.daysLeft : null
+  const estimating = stock.estimatedQuantity < stock.usableQuantity
   const latestUndoable = movements.find((m) => m.type !== 'REVERSAL' && !m.undone)
 
   return (
@@ -97,6 +97,19 @@ export function StockPanel({ medicine }: { medicine: Medicine }) {
         {daysLeft !== null && ` · about ${daysLeft} day${daysLeft === 1 ? '' : 's'} at ${formatQty(medicine.dailyDose!)} a day`}
         {stock.nextExpiry && ` · next expiry ${formatExpiry(stock.nextExpiry).replace('exp ', '')}`}
       </p>
+      {estimating && (
+        <p className="muted small">
+          Estimated {formatQty(stock.estimatedQuantity)} {unit} now, counting {formatQty(medicine.dailyDose ?? 0)} a
+          day since the last entry. Log doses or recount to correct it.
+        </p>
+      )}
+      {stock.alertStatus !== 'OK' && stock.usableQuantity > 0 && (
+        <p className="warning" role="alert">
+          {stock.alertStatus === 'OUT'
+            ? 'Probably run out by now: buy more, or recount.'
+            : `Low: about ${daysLeft ?? 0} day${daysLeft === 1 ? '' : 's'} left. Buy more soon.`}
+        </p>
+      )}
       {stock.expiredQuantity > 0 && (
         <p className="warning" role="alert">
           ⚠ {formatQty(stock.expiredQuantity)} {unit} expired: not counted. Throw them away below.

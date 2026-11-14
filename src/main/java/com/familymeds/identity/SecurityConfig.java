@@ -45,9 +45,14 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/auth/setup-status", "/api/v1/auth/csrf").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/setup", "/api/v1/auth/login").permitAll()
+                        // M5: the unsubscribe link (its random token is the credential) and the cron trigger
+                        // (checks its own bearer token). Neither uses the session, so CSRF doesn't apply.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/unsubscribe", "/internal/jobs/daily").permitAll()
+                        .requestMatchers("/internal/**").denyAll()
                         .requestMatchers("/api/**", "/v3/api-docs", "/v3/api-docs/**").authenticated()
                         .anyRequest().permitAll())
-                .csrf(csrf -> csrf.spa().csrfTokenRepository(csrfTokenRepository))
+                .csrf(csrf -> csrf.spa().csrfTokenRepository(csrfTokenRepository)
+                        .ignoringRequestMatchers("/api/v1/unsubscribe", "/internal/jobs/daily"))
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .exceptionHandling(e -> e

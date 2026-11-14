@@ -106,9 +106,9 @@ function MedicineList({ onAdd, onOpen }: { onAdd: () => void; onOpen: (id: strin
               </span>
               <span className="stock-line">
                 {formatNumber(m.usableQuantity)} {UNITS[m.unit]} left
-                {m.dailyDose && m.usableQuantity > 0
-                  ? ` · about ${Math.floor(m.usableQuantity / m.dailyDose)} days`
-                  : ''}
+                {m.daysLeft !== null && m.usableQuantity > 0 ? ` · about ${m.daysLeft} days` : ''}
+                {m.alertStatus === 'LOW' && <strong className="badge"> · LOW</strong>}
+                {m.alertStatus === 'OUT' && m.usableQuantity > 0 && <strong className="badge"> · run out?</strong>}
                 {m.expiredQuantity > 0 ? ` · ⚠ ${formatNumber(m.expiredQuantity)} expired` : ''}
               </span>
               <span className="muted small">

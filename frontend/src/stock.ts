@@ -13,6 +13,11 @@ export interface Stock {
   expiredQuantity: number
   nextExpiry: string | null
   lots: Lot[]
+  /** Estimated from the daily dose since the last entry; never saved as a dose. */
+  estimatedQuantity: number
+  daysLeft: number | null
+  runOutDate: string | null
+  alertStatus: 'OK' | 'LOW' | 'OUT'
 }
 
 export type MovementType = 'PURCHASE' | 'CONSUMPTION' | 'CORRECTION' | 'DISPOSAL' | 'REVERSAL'

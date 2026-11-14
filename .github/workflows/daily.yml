@@ -1,0 +1,40 @@
+# The daily check (M5): re-estimates every medicine's days left, sends low-stock emails, retries failed ones.
+# The free Render server sleeps, so nothing inside the app can run on a timer; this request also wakes it.
+# Needs the repository secret JOB_TOKEN (the same value as JOB_TOKEN on Render).
+name: Daily check
+
+on:
+  schedule:
+    - cron: '30 2 * * *'   # 02:30 UTC = 08:00 in India. GitHub may start it a little late.
+  workflow_dispatch:        # "Run workflow" button, for testing
+
+permissions: {}
+
+jobs:
+  daily:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Wake the server and run the daily check
+        env:
+          JOB_TOKEN: ${{ secrets.JOB_TOKEN }}
+          URL: https://family-medicine-tracker.onrender.com
+        run: |
+          if [ -z "$JOB_TOKEN" ]; then echo "::error::Repository secret JOB_TOKEN is not set"; exit 1; fi
+          # A sleeping server takes up to about a minute to start; keep trying for 5 minutes.
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /tmp/out.json -w '%{http_code}' --max-time 60 -X POST \
+              -H "Authorization: Bearer $JOB_TOKEN" "$URL/internal/jobs/daily" || true)
+            if [ "$code" = "200" ]; then
+              echo "Daily check result:"; cat /tmp/out.json; echo
+              if grep -q '"errors":0' /tmp/out.json; then exit 0; fi
+              echo "::error::The daily check reported errors"; exit 1
+            fi
+            if [ "$code" = "401" ] || [ "$code" = "404" ]; then
+              echo "::error::HTTP $code: JOB_TOKEN on Render and in GitHub secrets don't match (or isn't set on Render)"
+              exit 1
+            fi
+            echo "Attempt $i: HTTP $code, server probably starting; waiting"
+            sleep 10
+          done
+          echo "::error::Server didn't answer in time"; exit 1
