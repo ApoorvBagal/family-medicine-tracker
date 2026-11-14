@@ -1,0 +1,67 @@
+name: Deploy
+
+# Runs only after the CI workflow finishes on a push to main, and only if it passed.
+# Untested code never reaches production.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Never run two deploys at once; queue them instead of cancelling a deploy halfway.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Render
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://family-medicine-tracker.onrender.com
+    env:
+      APP_URL: https://family-medicine-tracker.onrender.com
+    steps:
+      - name: Trigger Render deploy
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "::error::Secret RENDER_DEPLOY_HOOK_URL is not set (Repo → Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+          echo "DEPLOY_STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+          # The hook URL is a secret; GitHub masks it in logs. -f fails the step on HTTP errors.
+          curl -fsS -X POST "$RENDER_DEPLOY_HOOK_URL" -o /dev/null
+          echo "Deploy triggered for commit ${{ github.event.workflow_run.head_sha }}"
+
+      # Render builds the image itself (~5-10 min on the free tier), then switches traffic only once
+      # /actuator/health is UP. We wait until /actuator/info reports a build newer than the trigger.
+      - name: Wait for the new version to be live
+        timeout-minutes: 20
+        run: |
+          while true; do
+            info=$(curl -fsS --max-time 90 "$APP_URL/actuator/info" || true)
+            built=$(echo "$info" | jq -r '.build.time // empty' 2>/dev/null || true)
+            if [ -n "$built" ] && [[ "$built" > "$DEPLOY_STARTED" ]]; then
+              echo "New build live: built $built, boots.total=$(echo "$info" | jq -r '.boots.total')"
+              break
+            fi
+            echo "Waiting... live build: ${built:-unreachable}"
+            sleep 30
+          done
+
+      - name: Smoke test
+        run: |
+          status=$(curl -fsS --max-time 60 "$APP_URL/actuator/health" | jq -r .status)
+          echo "health: $status"
+          test "$status" = "UP"
+          # Sensitive actuator endpoints must stay hidden in production.
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 "$APP_URL/actuator/env")
+          echo "/actuator/env -> $code"
+          test "$code" = "404"

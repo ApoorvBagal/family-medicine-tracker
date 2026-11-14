@@ -37,6 +37,9 @@ _Last updated: 2026-11-14_
 - 2026-11-14 **Neon connection verified from laptop**: project `square-moon-64989328` (Singapore, PG 18, branch `production`). Flyway applied V1 on Neon; TLS verify-full works; `boots.total` 1 → 2 → 3 across separate JVM processes = persistence OK.
 - 2026-11-14 local `./mvnw verify`: BUILD SUCCESS (unit tests incl. 5 new `NeonDatabaseUrlTest`; integration tests skipped, no Docker).
 
+- 2026-11-14 **Deployed to Render** (free, Singapore): https://family-medicine-tracker.onrender.com — `/actuator/health` UP over HTTPS, HTTP→HTTPS 301, `/actuator/env` 404 (not exposed). `boots.total` = 5: boots #4 and #5 came from two **different** Render containers and both see the laptop rows → data persists across container replacement.
+- Still to record: startup time from Render logs; confirm both a restart **and** a redeploy increment `boots.total`; cold-start time after 15+ min idle.
+
 ## Tooling installed (2026-11-14)
 - Neon CLI `neon@9.5.0` (global npm, installed by owner), signed in.
 - Project-level Neon MCP server: `.mcp.json` (OAuth, URL only, pinned to project) — loads after restarting Claude.
@@ -54,8 +57,8 @@ _Last updated: 2026-11-14_
 ## Next steps (rest of M0)
 1. ~~Commit, push, CI green~~ ✅ — next: open PR `m0/walking-skeleton` → `main` and merge.
 2. ~~Neon project + connection~~ ✅ verified from laptop.
-3. Create Render web service from the repo (Docker, free plan, **Singapore**): env vars `SPRING_PROFILES_ACTIVE=prod`, `DATABASE_URL_UNPOOLED` (from `.env.local`); health check path `/actuator/health`; auto-deploy off.
-4. Verify `https://<service>.onrender.com/actuator/health` = UP; note cold-start time.
-5. Persistence test: note `boots.total`, restart the service, then redeploy → total must increase each time.
+3. ~~Render web service~~ ✅ live at https://family-medicine-tracker.onrender.com
+4. ~~Health UP over HTTPS~~ ✅ — cold-start time still to note.
+5. Persistence: ✅ across container replacement; confirm restart + redeploy each increment.
 6. Add `deploy.yml` (Render deploy hook after CI passes).
 7. Install Docker Desktop (needed from M1 for local DB work).
