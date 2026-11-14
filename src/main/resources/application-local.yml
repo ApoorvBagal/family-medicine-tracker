@@ -1,0 +1,12 @@
+# Local development only (activate with SPRING_PROFILES_ACTIVE=local).
+# Matches docker-compose.yml. These are throwaway local credentials, not secrets.
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/familymeds}
+    username: ${DB_USER:familymeds}
+    password: ${DB_PASSWORD:familymeds}
+
+management:
+  endpoint:
+    health:
+      show-details: always
