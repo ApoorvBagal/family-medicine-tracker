@@ -52,7 +52,8 @@ class ApplicationIntegrationTest {
     void infoReportsBootHistory() throws Exception {
         mvc.perform(get("/actuator/info"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.boots.total").isNumber());
+                .andExpect(jsonPath("$.boots.total").isNumber())
+                .andExpect(jsonPath("$.app.commit").value("local"));
     }
 
     @Test

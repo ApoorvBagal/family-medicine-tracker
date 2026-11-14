@@ -36,3 +36,12 @@ management:
   info:
     build:
       enabled: true
+    env:
+      enabled: true   # publishes the info.* properties below
+
+# Shown at /actuator/info. RENDER_GIT_COMMIT is set by Render for each deploy; the deploy workflow
+# waits until this matches the commit CI tested. (build.time can't be used: Docker layer caching
+# reuses the old jar when only non-code files changed.)
+info:
+  app:
+    commit: ${RENDER_GIT_COMMIT:local}

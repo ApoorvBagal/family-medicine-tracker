@@ -41,18 +41,22 @@ jobs:
           echo "Deploy triggered for commit ${{ github.event.workflow_run.head_sha }}"
 
       # Render builds the image itself (~5-10 min on the free tier), then switches traffic only once
-      # /actuator/health is UP. We wait until /actuator/info reports a build newer than the trigger.
-      - name: Wait for the new version to be live
-        timeout-minutes: 20
+      # /actuator/health is UP. We wait until /actuator/info reports the exact commit CI tested
+      # (Render sets RENDER_GIT_COMMIT per deploy; the app publishes it as app.commit).
+      - name: Wait for the tested commit to be live
+        timeout-minutes: 25
+        env:
+          EXPECTED_COMMIT: ${{ github.event.workflow_run.head_sha }}
         run: |
+          echo "Waiting for commit $EXPECTED_COMMIT (deploy triggered at $DEPLOY_STARTED)"
           while true; do
             info=$(curl -fsS --max-time 90 "$APP_URL/actuator/info" || true)
-            built=$(echo "$info" | jq -r '.build.time // empty' 2>/dev/null || true)
-            if [ -n "$built" ] && [[ "$built" > "$DEPLOY_STARTED" ]]; then
-              echo "New build live: built $built, boots.total=$(echo "$info" | jq -r '.boots.total')"
+            live=$(echo "$info" | jq -r '.app.commit // empty' 2>/dev/null || true)
+            if [ "$live" = "$EXPECTED_COMMIT" ]; then
+              echo "Commit $live is live, boots.total=$(echo "$info" | jq -r '.boots.total')"
               break
             fi
-            echo "Waiting... live build: ${built:-unreachable}"
+            echo "Waiting... live commit: ${live:-unknown/unreachable}"
             sleep 30
           done
 

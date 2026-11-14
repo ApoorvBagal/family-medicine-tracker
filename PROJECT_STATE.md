@@ -38,6 +38,7 @@ _Last updated: 2026-11-14_
 - 2026-11-14 local `./mvnw verify`: BUILD SUCCESS (unit tests incl. 5 new `NeonDatabaseUrlTest`; integration tests skipped, no Docker).
 
 - 2026-11-14 **Deployed to Render** (free, Singapore): https://family-medicine-tracker.onrender.com — `/actuator/health` UP over HTTPS, HTTP→HTTPS 301, `/actuator/env` 404 (not exposed). `boots.total` = 5: boots #4 and #5 came from two **different** Render containers and both see the laptop rows → data persists across container replacement.
+- 2026-11-14 First automated deploy (PR #4 merge): CI ✅, deploy hook ✅, Render redeployed (`boots.total` 5 → 6), but the workflow's "new version live" check **timed out**: it compared `build.time`, which didn't change because Render's Docker cache reused the jar (the merge only touched `.github/` and `*.md`, both `.dockerignore`d). Fix: app publishes `app.commit` (from `RENDER_GIT_COMMIT`) at `/actuator/info`; workflow waits for the exact CI-tested commit. Verified locally (`app.commit` read back correctly). Boot #7 = this local check (laptop still points at Neon `production` — dev branch needed from M1).
 - Still to record: startup time from Render logs; confirm both a restart **and** a redeploy increment `boots.total`; cold-start time after 15+ min idle.
 
 ## Tooling installed (2026-11-14)
