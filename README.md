@@ -26,6 +26,21 @@ If `.env.local` ever points at production, a warning is logged. Fix it with `neo
 
 Then open http://localhost:8080/actuator/health and http://localhost:8080/actuator/info.
 
+## Frontend (React + Vite PWA in `frontend/`)
+
+The Maven build downloads its own Node (`frontend/node`, pinned in `pom.xml`), runs `npm ci` and
+`npm run build` (type-check + Vite), and puts the result in `target/classes/static`, so it ships inside
+the jar and is served by Spring Boot at `/`. No system Node needed.
+
+Live-reload while working on the UI (backend running on :8080):
+
+```powershell
+cd frontend; $env:Path = "$PWD\node;$env:Path"; .\node\npm.cmd run dev
+```
+
+Local dev login: `.env.dev-owner.local` (git-ignored) holds a throwaway owner account on the Neon `dev`
+branch, plus the dev-only setup token used to create it.
+
 ## Test
 
 All tests, including database tests, against the Neon `test` branch:

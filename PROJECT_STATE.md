@@ -60,7 +60,17 @@ _Last updated: 2026-11-14_
 - Test DB isolation: each run gets its own schema `test_<epoch>_<hex>`, set via `hikari.connection-init-sql` (**Neon's proxy ignores the JDBC `currentSchema` option**, which a new guard test caught), dropped at exit; stale ones dropped after a day. Tests also switch off the `.env.local` hook (`app.neon-env.enabled=false`) so they can never pick up the dev branch.
 - Bugs caught by the new tests before shipping: session timeout was 30 **minutes** (`server.servlet.session.timeout` is ignored by Spring Session); tests were running in the test branch's `public` schema instead of their own.
 - Results: `.\scripts\test-with-neon.ps1` → **29 tests, 0 failures, 0 skipped**; test schema cleaned up afterwards.
+- 2026-11-14 **Deployed** (PR #7, commit 0b8a55c): CI ✅ → Deploy ✅ (live commit matched). Production probes: `setup-status` → `{"setupRequired":true}`; `me` without login → 401 problem+json `UNAUTHENTICATED`; `csrf` sets `XSRF-TOKEN`; setup → 403 `SETUP_DISABLED` (no token yet); login without CSRF → 403 `CSRF_TOKEN_INVALID`.
 - Deploy note: V2 runs on production at deploy. Setup stays disabled (`SETUP_DISABLED`) until `SETUP_TOKEN` is set on Render.
+
+### M1c — Installable app shell (2026-11-14, branch `m1c/pwa-shell`)
+- `frontend/`: React 19.3.1 + Vite 8.3.5 + TypeScript 7.0.2 (versions pinned, each ≥ 2 weeks old; 24 npm packages total, lock file committed). Built by `frontend-maven-plugin` 2.0.2 with its own Node v22.23.4 into `target/classes/static`; Dockerfile copies `frontend/`.
+- Screens: starting / "waking up the server" (retries 502/503/network for up to 2 min), unreachable + retry, first-time setup (token, household, name, email, password ×2), login, home (greeting, placeholder card, logout). Error codes mapped to plain-English messages. Large text/touch targets, light + dark.
+- PWA: `manifest.webmanifest` (standalone, start_url `/`, 192/512 + maskable 512 icons generated with Java2D). **No service worker yet, on purpose**: Chrome on Android no longer requires one to install, and a badly cached shell is a classic "stuck on old version" bug. Revisit in M7 (offline shell would also hide cold starts).
+- Server: strict CSP (`'self'` only; the build has no inline scripts/styles), Permissions-Policy, hashed `/assets/**` cached 1 year immutable, everything else `no-cache`, `.webmanifest` → `application/manifest+json`.
+- Tests: `StaticSiteIntegrationTest` (real server on a random port: `/` serves the app with CSP + no-cache, asset cache headers, manifest content type + installability fields, API errors stay JSON).
+- Results: `.\scripts\test-with-neon.ps1` → **33 tests, 0 failures, 0 skipped**, frontend built inside the Maven run. Manual browser test locally against Neon `dev`: wrong setup token → clear message; setup → home; reload → still logged in; logout → login screen; wrong password → message; login → home; no console errors (CSP not blocking anything); phone width + dark mode OK.
+- Not yet verified: installing on a real Android phone (needs the Render deploy + `SETUP_TOKEN`), and the waking screen against a real Render cold start.
 
 ## Tooling installed (2026-11-14)
 - Neon CLI `neon@9.5.0` (global npm, installed by owner), signed in.

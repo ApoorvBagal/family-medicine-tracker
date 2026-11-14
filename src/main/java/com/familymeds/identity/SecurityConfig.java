@@ -16,6 +16,7 @@ import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfException;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
+import org.springframework.security.web.header.writers.StaticHeadersWriter;
 
 import com.familymeds.shared.web.ProblemResponses;
 
@@ -31,6 +32,10 @@ import com.familymeds.shared.web.ProblemResponses;
  */
 @Configuration
 public class SecurityConfig {
+
+    static final String CONTENT_SECURITY_POLICY = "default-src 'self'; script-src 'self'; style-src 'self'; "
+            + "img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; object-src 'none'; "
+            + "base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, CookieCsrfTokenRepository csrfTokenRepository)
@@ -61,7 +66,13 @@ public class SecurityConfig {
                         .logoutUrl("/api/v1/auth/logout") // POST only, CSRF-protected
                         .deleteCookies("SESSION")
                         .logoutSuccessHandler((req, res, auth) -> res.setStatus(204)))
-                .headers(h -> h.referrerPolicy(r -> r.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.SAME_ORIGIN)));
+                .headers(h -> h
+                        .referrerPolicy(r -> r.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.SAME_ORIGIN))
+                        // The built app has no inline scripts or styles, so everything can be locked to 'self'.
+                        // This blocks injected scripts even if an XSS bug slipped in.
+                        .contentSecurityPolicy(csp -> csp.policyDirectives(CONTENT_SECURITY_POLICY))
+                        .addHeaderWriter(new StaticHeadersWriter("Permissions-Policy",
+                                "camera=(), microphone=(), geolocation=(), payment=(), usb=()")));
         return http.build();
     }
 

@@ -7,3 +7,5 @@ docs
 *.md
 .env
 .env.*
+frontend/node
+frontend/node_modules
