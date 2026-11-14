@@ -74,6 +74,9 @@ and permanently once done).
 | POST | `/api/v1/medicines/{id}/archive`, `/restore` | logged in |
 | GET | `/api/v1/medicines/{id}/history` | logged in |
 | GET | `/v3/api-docs` (OpenAPI JSON) | logged in |
+| GET | `/api/v1/medicines/{id}/stock`, `/movements` | logged in |
+| POST | `/api/v1/medicines/{id}/purchases`, `/consumptions`, `/recounts`, `/disposals` (need `Idempotency-Key`) | logged in |
+| POST | `/api/v1/stock-movements/{id}/reversal` (undo; needs `Idempotency-Key`) | logged in |
 
 Errors are `application/problem+json` with a stable `code` (e.g. `INVALID_CREDENTIALS`, `TOO_MANY_ATTEMPTS`).
 

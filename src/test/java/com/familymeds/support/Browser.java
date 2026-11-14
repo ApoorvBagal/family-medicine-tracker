@@ -63,6 +63,17 @@ public class Browser {
         }
     }
 
+    /** POST with CSRF plus extra headers (e.g. Idempotency-Key). */
+    public ResultActions post(String path, String json, Map<String, String> headers) throws Exception {
+        if (!cookies.containsKey("XSRF-TOKEN")) {
+            get("/api/v1/auth/csrf");
+        }
+        MockHttpServletRequestBuilder request = MockMvcRequestBuilders.post(path)
+                .contentType(MediaType.APPLICATION_JSON).content(json);
+        headers.forEach(request::header);
+        return perform(request, true);
+    }
+
     /** POST without a CSRF header: what a malicious cross-site form could send. */
     public ResultActions postWithoutCsrf(String path, String json) throws Exception {
         return perform(MockMvcRequestBuilders.post(path).contentType(MediaType.APPLICATION_JSON).content(json), false);

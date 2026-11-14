@@ -44,6 +44,25 @@ export function messageFor(error: unknown): string {
       return 'This medicine is archived. Restore it before editing.'
     case 'MEDICINE_NOT_FOUND':
       return 'This medicine no longer exists.'
+    case 'INSUFFICIENT_STOCK': {
+      const usable = Number(error.extra.usable ?? 0)
+      const expired = Number(error.extra.expired ?? 0)
+      return `Not enough usable stock: only ${usable} left` + (expired > 0 ? ` (${expired} more are expired).` : '.')
+    }
+    case 'STOCK_CONFLICT':
+      return `Stock changed while you were counting (now ${error.extra.currentUsable}). Check and save your count again.`
+    case 'ALREADY_EXPIRED':
+      return 'That expiry month has already passed. Expired stock can’t be added.'
+    case 'CANNOT_UNDO':
+      return 'Can’t undo: some of that stock has already been used. Use Recount instead.'
+    case 'ALREADY_UNDONE':
+      return 'That was already undone.'
+    case 'CANNOT_UNDO_UNDO':
+      return 'An undo can’t be undone. Record the change again instead.'
+    case 'LOT_NOT_FOUND':
+      return 'That batch is already gone.'
+    case 'IDEMPOTENCY_KEY_REUSED':
+      return 'Something went wrong with that request. Please try again.'
     case 'UNAUTHENTICATED':
       return 'You were logged out. Please log in again.'
     case 'VALIDATION_FAILED':

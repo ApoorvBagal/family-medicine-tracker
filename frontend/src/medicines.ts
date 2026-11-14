@@ -40,6 +40,8 @@ export interface MedicineInput {
 
 export interface Medicine extends MedicineInput {
   id: string
+  usableQuantity: number
+  expiredQuantity: number
   archived: boolean
   archivedAt: string | null
   version: number
