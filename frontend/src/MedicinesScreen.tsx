@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { ApiError } from './api'
+import { StockPanel } from './StockPanel'
 import { FIELD_LABELS, messageFor } from './messages'
 import {
   DOSAGE_FORMS,
@@ -102,6 +103,13 @@ function MedicineList({ onAdd, onOpen }: { onAdd: () => void; onOpen: (id: strin
               <span className="item-title">{describe(m)}</span>
               <span className="muted">
                 {[m.brandName, m.storageLocation].filter(Boolean).join(' · ') || ' '}
+              </span>
+              <span className="stock-line">
+                {formatNumber(m.usableQuantity)} {UNITS[m.unit]} left
+                {m.dailyDose && m.usableQuantity > 0
+                  ? ` · about ${Math.floor(m.usableQuantity / m.dailyDose)} days`
+                  : ''}
+                {m.expiredQuantity > 0 ? ` · ⚠ ${formatNumber(m.expiredQuantity)} expired` : ''}
               </span>
               <span className="muted small">
                 {m.dailyDose
@@ -284,7 +292,9 @@ function MedicineForm({
       <button className="link" onClick={onDone}>
         ← Back to list
       </button>
-      <h2>{loaded ? (readOnly ? `${loaded.name} (archived)` : `Edit ${loaded.name}`) : 'Add a medicine'}</h2>
+      <h2>{loaded ? (readOnly ? `${loaded.name} (archived)` : describeTitle(loaded)) : 'Add a medicine'}</h2>
+      {loaded && !readOnly && <StockPanel medicine={loaded} />}
+      {loaded && <h3 className="section-title">Medicine details</h3>}
       <form onSubmit={submit} className="form">
         <fieldset disabled={readOnly || busy}>
           <label>
@@ -462,6 +472,10 @@ function History({ id, version }: { id: string; version: number }) {
       </ul>
     </details>
   )
+}
+
+function describeTitle(m: Medicine): string {
+  return [m.name, m.strength].filter(Boolean).join(' ')
 }
 
 function show(v: unknown): string {

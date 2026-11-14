@@ -74,12 +74,20 @@ public class MedicineController {
     public record MedicineView(UUID id, String name, String brandName, String strength,
             Medicine.DosageForm dosageForm, Medicine.Unit unit, BigDecimal minThreshold, BigDecimal dailyDose,
             int warnDays, String storageLocation, String notes, boolean archived, OffsetDateTime archivedAt,
-            long version, OffsetDateTime createdAt, OffsetDateTime updatedAt) {
+            long version, OffsetDateTime createdAt, OffsetDateTime updatedAt,
+            BigDecimal usableQuantity, BigDecimal expiredQuantity) {
 
         static MedicineView of(Medicine m) {
+            return of(m, null);
+        }
+
+        /** {@code totals} = {usable, expired}; filled in on the list so it can show stock at a glance. */
+        static MedicineView of(Medicine m, BigDecimal[] totals) {
+            BigDecimal usable = totals == null ? BigDecimal.ZERO : totals[0];
+            BigDecimal expired = totals == null ? BigDecimal.ZERO : totals[1];
             return new MedicineView(m.id(), m.name(), m.brandName(), m.strength(), m.dosageForm(), m.unit(),
                     m.minThreshold(), m.dailyDose(), m.warnDays(), m.storageLocation(), m.notes(), m.archived(),
-                    m.archivedAt(), m.version(), m.createdAt(), m.updatedAt());
+                    m.archivedAt(), m.version(), m.createdAt(), m.updatedAt(), usable, expired);
         }
     }
 
@@ -94,16 +102,19 @@ public class MedicineController {
     static final int DEFAULT_WARN_DAYS = 5;
 
     private final MedicineService service;
+    private final StockService stock;
 
-    public MedicineController(MedicineService service) {
+    public MedicineController(MedicineService service, StockService stock) {
         this.service = service;
+        this.stock = stock;
     }
 
     @GetMapping
     public List<MedicineView> list(@AuthenticationPrincipal AppUserPrincipal user,
             @RequestParam(required = false) @Size(max = 100) String q,
             @RequestParam(defaultValue = "false") boolean archived) {
-        return service.list(user, q, archived).stream().map(MedicineView::of).toList();
+        var totals = stock.totals(user);
+        return service.list(user, q, archived).stream().map(m -> MedicineView.of(m, totals.get(m.id()))).toList();
     }
 
     @PostMapping

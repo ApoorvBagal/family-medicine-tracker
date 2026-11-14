@@ -330,3 +330,75 @@ label.check input {
 .history ul {
   padding-left: 1.2rem;
 }
+
+/* --- M3: stock --- */
+.big-number {
+  font-size: 2.6rem;
+  font-weight: 800;
+  line-height: 1.1;
+  margin: 0;
+}
+
+.big-number span {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.stock p {
+  margin: 0.25rem 0;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin: 1rem 0 0.5rem;
+}
+
+.actions button {
+  min-height: 3.4rem;
+  padding: 0.4rem;
+  font-size: 0.95rem;
+}
+
+.inline-form {
+  margin-top: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.warning {
+  background: var(--error-bg);
+  color: var(--error-text);
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  font-weight: 600;
+}
+
+ul.plain {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+ul.plain li.expired {
+  color: var(--error-text);
+}
+
+ul.plain li.undone {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.stock-line {
+  font-weight: 600;
+}
+
+.section-title {
+  margin: 1.5rem 0 0;
+  font-size: 1.1rem;
+}
