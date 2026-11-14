@@ -75,19 +75,22 @@ public class MedicineController {
             Medicine.DosageForm dosageForm, Medicine.Unit unit, BigDecimal minThreshold, BigDecimal dailyDose,
             int warnDays, String storageLocation, String notes, boolean archived, OffsetDateTime archivedAt,
             long version, OffsetDateTime createdAt, OffsetDateTime updatedAt,
-            BigDecimal usableQuantity, BigDecimal expiredQuantity) {
+            BigDecimal usableQuantity, BigDecimal expiredQuantity, BigDecimal estimatedQuantity, Integer daysLeft,
+            String alertStatus) {
 
         static MedicineView of(Medicine m) {
-            return of(m, null);
+            return of(m, null, null);
         }
 
         /** {@code totals} = {usable, expired}; filled in on the list so it can show stock at a glance. */
-        static MedicineView of(Medicine m, BigDecimal[] totals) {
+        static MedicineView of(Medicine m, BigDecimal[] totals, com.familymeds.alerts.Runway runway) {
             BigDecimal usable = totals == null ? BigDecimal.ZERO : totals[0];
             BigDecimal expired = totals == null ? BigDecimal.ZERO : totals[1];
             return new MedicineView(m.id(), m.name(), m.brandName(), m.strength(), m.dosageForm(), m.unit(),
                     m.minThreshold(), m.dailyDose(), m.warnDays(), m.storageLocation(), m.notes(), m.archived(),
-                    m.archivedAt(), m.version(), m.createdAt(), m.updatedAt(), usable, expired);
+                    m.archivedAt(), m.version(), m.createdAt(), m.updatedAt(), usable, expired,
+                    runway == null ? null : runway.estimated(), runway == null ? null : runway.daysLeft(),
+                    runway == null ? null : runway.status().name());
         }
     }
 
@@ -103,10 +106,13 @@ public class MedicineController {
 
     private final MedicineService service;
     private final StockService stock;
+    private final com.familymeds.alerts.AlertService alerts;
 
-    public MedicineController(MedicineService service, StockService stock) {
+    public MedicineController(MedicineService service, StockService stock,
+            com.familymeds.alerts.AlertService alerts) {
         this.service = service;
         this.stock = stock;
+        this.alerts = alerts;
     }
 
     @GetMapping
@@ -114,7 +120,11 @@ public class MedicineController {
             @RequestParam(required = false) @Size(max = 100) String q,
             @RequestParam(defaultValue = "false") boolean archived) {
         var totals = stock.totals(user);
-        return service.list(user, q, archived).stream().map(m -> MedicineView.of(m, totals.get(m.id()))).toList();
+        return service.list(user, q, archived).stream().map(m -> {
+            BigDecimal[] t = totals.get(m.id());
+            var runway = alerts.runway(user.householdId(), m, t == null ? BigDecimal.ZERO : t[0]);
+            return MedicineView.of(m, t, runway);
+        }).toList();
     }
 
     @PostMapping

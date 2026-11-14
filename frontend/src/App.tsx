@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from
 import { api, ApiError, type Me } from './api'
 import { messageFor } from './messages'
 import { MedicinesScreen } from './MedicinesScreen'
+import { AlertsPanel, UnsubscribeScreen } from './AlertsPanel'
 
 type Screen =
   | { kind: 'starting'; waking: boolean }
@@ -16,6 +17,19 @@ const GIVE_UP_AFTER_MS = 120_000
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 export default function App() {
+  // Link from an alert email: unsubscribe without logging in.
+  const unsubscribeToken = new URLSearchParams(window.location.search).get('unsubscribe')
+  if (unsubscribeToken) {
+    return (
+      <Page title="Medicine alert emails">
+        <UnsubscribeScreen token={unsubscribeToken} />
+      </Page>
+    )
+  }
+  return <MainApp />
+}
+
+function MainApp() {
   const [screen, setScreen] = useState<Screen>({ kind: 'starting', waking: false })
 
   /**
@@ -268,6 +282,7 @@ function HomeScreen({ me, onLoggedOut }: { me: Me; onLoggedOut: () => void }) {
     <Page title={`Hello, ${me.user.displayName}`}>
       <p className="muted">{me.household.name}</p>
       <MedicinesScreen />
+      <AlertsPanel ownerEmail={me.user.email} />
       <ErrorBox error={error} />
       <button className="secondary" onClick={() => void logout()}>
         Log out
