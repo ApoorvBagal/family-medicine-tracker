@@ -37,6 +37,16 @@ class ApplicationIntegrationTest {
     @Autowired
     BootLogRepository bootLog;
 
+    @Autowired
+    org.springframework.jdbc.core.simple.JdbcClient jdbc;
+
+    /** Guards against tests silently using another database (e.g. dev via .env.local). */
+    @Test
+    void appIsConnectedToThisRunsTestSchema() {
+        assertThat(jdbc.sql("select current_schema()").query(String.class).single()).isEqualTo(TestDatabase.schema());
+        assertThat(jdbc.sql("select count(*) from installation").query(Long.class).single()).isNotNull();
+    }
+
     @Test
     void flywayMigratesAndStartupIsRecorded() {
         assertThat(bootLog.count()).isGreaterThanOrEqualTo(1);

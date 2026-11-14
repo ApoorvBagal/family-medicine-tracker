@@ -52,6 +52,16 @@ _Last updated: 2026-11-14_
 - `scripts/test-with-neon.ps1` fetches the `test` branch URL from the Neon CLI and runs `verify`.
 - Results: `.\scripts\test-with-neon.ps1` → **11 tests, 0 skipped, BUILD SUCCESS** locally without Docker. Plain `verify` → 7 run, 4 skipped. Production `boots.total` stayed at 9 through the test run and a local app run (local run hit `dev`).
 
+### M1b — Login backend (2026-11-14, branch `m1b/auth-backend`)
+- Flyway **V2**: `household`, `app_user` (unique lower-case email), `installation` (single row id=1 = setup done; guards concurrent setups), Spring Session JDBC tables (copied verbatim from spring-session-jdbc 4.1.1).
+- Endpoints under `/api/v1/auth`: `GET setup-status`, `GET csrf`, `POST setup` (needs `SETUP_TOKEN`, once only, logs the owner in), `POST login`, `POST logout`, `GET me`.
+- Security: Spring Security 7 `csrf().spa()` (XSRF-TOKEN cookie → X-XSRF-TOKEN header), sessions in Postgres for **30 days** (`spring.session.timeout`), session id changed and CSRF token rotated on login, BCrypt via delegating encoder, password hash erased from the session, generic login errors, login limiter (5 failures/IP, 10/email per 15 min → 429 + Retry-After), setup-token guessing limited too, problem+json for every error (incl. 401/403 from the security filters), no form login / Basic-auth popups.
+- Tests: `AuthIntegrationTest` (12 ordered steps: setup-status, 401, CSRF missing, wrong token, validation without echoing the password, setup + session + CSRF rotation, session row in Postgres with 30-day timeout and no hash, second setup 409, logout invalidates server-side (stolen cookie useless), generic wrong-password/unknown-email, IP rate limit, login). `LoginAttemptLimiterTest` (5, fake clock).
+- Test DB isolation: each run gets its own schema `test_<epoch>_<hex>`, set via `hikari.connection-init-sql` (**Neon's proxy ignores the JDBC `currentSchema` option**, which a new guard test caught), dropped at exit; stale ones dropped after a day. Tests also switch off the `.env.local` hook (`app.neon-env.enabled=false`) so they can never pick up the dev branch.
+- Bugs caught by the new tests before shipping: session timeout was 30 **minutes** (`server.servlet.session.timeout` is ignored by Spring Session); tests were running in the test branch's `public` schema instead of their own.
+- Results: `.\scripts\test-with-neon.ps1` → **29 tests, 0 failures, 0 skipped**; test schema cleaned up afterwards.
+- Deploy note: V2 runs on production at deploy. Setup stays disabled (`SETUP_DISABLED`) until `SETUP_TOKEN` is set on Render.
+
 ## Tooling installed (2026-11-14)
 - Neon CLI `neon@9.5.0` (global npm, installed by owner), signed in.
 - Project-level Neon MCP server: `.mcp.json` (OAuth, URL only, pinned to project) — loads after restarting Claude.

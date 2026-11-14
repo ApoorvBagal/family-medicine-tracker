@@ -44,6 +44,11 @@ public class NeonDatasourceEnvironmentPostProcessor implements EnvironmentPostPr
         if (StringUtils.hasText(environment.getProperty("DB_URL"))) {
             return;
         }
+        // Tests turn this off (src/test/resources/application.properties): otherwise .env.local, which points
+        // at the dev branch, would override the test database and tests would silently run against dev.
+        if (!environment.getProperty("app.neon-env.enabled", Boolean.class, true)) {
+            return;
+        }
         String source = "environment variable " + NEON_VAR;
         String url = environment.getProperty(NEON_VAR);
         if (!StringUtils.hasText(url)) {

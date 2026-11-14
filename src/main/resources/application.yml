@@ -17,11 +17,32 @@ spring:
       connection-timeout: 30000
   flyway:
     enabled: true
+  session:
+    # One owner on their own phone: stay logged in for 30 days of inactivity. Spring Session reads this,
+    # not server.servlet.session.timeout (that one alone gave 30 minutes; AuthIntegrationTest checks it).
+    timeout: 30d
+    jdbc:
+      initialize-schema: never   # tables come from Flyway V2
+  mvc:
+    problemdetails:
+      enabled: true              # RFC 9457 application/problem+json for errors
 
 server:
   port: ${PORT:8080}            # Render injects PORT
   shutdown: graceful
   forward-headers-strategy: framework   # trust X-Forwarded-* from the hosting proxy (HTTPS detection)
+  servlet:
+    session:
+      # Sessions live in Postgres (spring.session above), so restarts and redeploys don't log anyone out.
+      cookie:
+        http-only: true          # JavaScript can't read the session cookie
+        secure: true             # HTTPS only (browsers also allow it on http://localhost)
+        same-site: lax
+        max-age: 30d             # persistent cookie, so closing the app doesn't log out
+
+app:
+  # One-time secret needed to create the owner account (D12). Set on Render; can be removed after setup.
+  setup-token: ${SETUP_TOKEN:}
 
 management:
   endpoints:
