@@ -1,0 +1,20 @@
+# Local Postgres for development: `docker compose up -d`
+# Version matches what we will use on Neon.
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: familymeds
+      POSTGRES_USER: familymeds
+      POSTGRES_PASSWORD: familymeds
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U familymeds -d familymeds"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  pgdata:

@@ -1,0 +1,5 @@
+# Production (Render). Activate with SPRING_PROFILES_ACTIVE=prod.
+logging:
+  structured:
+    format:
+      console: ecs   # one JSON object per line: searchable in Render's log viewer
