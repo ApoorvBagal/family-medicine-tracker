@@ -48,7 +48,11 @@ public class NeonDatasourceEnvironmentPostProcessor implements EnvironmentPostPr
         String url = environment.getProperty(NEON_VAR);
         if (!StringUtils.hasText(url)) {
             url = readDotEnv(ENV_FILE, NEON_VAR);
-            source = ENV_FILE + " (" + NEON_VAR + ")";
+            String branch = readDotEnv(ENV_FILE, "NEON_BRANCH");
+            source = ENV_FILE + " (" + NEON_VAR + ", Neon branch '" + (branch != null ? branch : "?") + "')";
+            if ("production".equals(branch) && !environment.matchesProfiles("prod")) {
+                log.warn("Local run is using the Neon PRODUCTION branch. Use the dev branch instead: neon link --branch dev");
+            }
         }
         if (!StringUtils.hasText(url)) {
             return;
