@@ -13,9 +13,19 @@ export class ApiError extends Error {
   readonly code: string
   readonly fieldErrors: FieldError[]
   readonly retryAfterSeconds?: number
+  /** Extra problem+json fields, e.g. existingId for DUPLICATE_MEDICINE. */
+  readonly extra: Record<string, unknown>
 
-  constructor(status: number, code: string, message: string, fieldErrors: FieldError[] = [], retryAfterSeconds?: number) {
+  constructor(
+    status: number,
+    code: string,
+    message: string,
+    fieldErrors: FieldError[] = [],
+    retryAfterSeconds?: number,
+    extra: Record<string, unknown> = {},
+  ) {
     super(message)
+    this.extra = extra
     this.status = status
     this.code = code
     this.fieldErrors = fieldErrors
@@ -54,8 +64,14 @@ async function ensureCsrfCookie(): Promise<void> {
   }
 }
 
-async function request<T>(method: string, path: string, body?: unknown, retriedCsrf = false): Promise<T> {
-  const headers: Record<string, string> = { Accept: 'application/json' }
+export async function request<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  extraHeaders: Record<string, string> = {},
+  retriedCsrf = false,
+): Promise<T> {
+  const headers: Record<string, string> = { Accept: 'application/json', ...extraHeaders }
   if (method !== 'GET') {
     await ensureCsrfCookie()
     const token = readCookie('XSRF-TOKEN')
@@ -79,7 +95,7 @@ async function request<T>(method: string, path: string, body?: unknown, retriedC
     return (res.status === 204 ? undefined : await res.json()) as T
   }
 
-  let problem: { code?: string; detail?: string; errors?: FieldError[] } = {}
+  let problem: { code?: string; detail?: string; errors?: FieldError[]; [key: string]: unknown } = {}
   try {
     problem = await res.json()
   } catch {
@@ -89,7 +105,7 @@ async function request<T>(method: string, path: string, body?: unknown, retriedC
   // Stale CSRF cookie (e.g. after logout or a server restart): drop it, fetch a fresh one, retry once.
   if (res.status === 403 && problem.code === 'CSRF_TOKEN_INVALID' && !retriedCsrf) {
     document.cookie = 'XSRF-TOKEN=; Max-Age=0; path=/; Secure; SameSite=Lax'
-    return request<T>(method, path, body, true)
+    return request<T>(method, path, body, extraHeaders, true)
   }
 
   const retryAfter = Number(res.headers.get('Retry-After'))
@@ -99,6 +115,7 @@ async function request<T>(method: string, path: string, body?: unknown, retriedC
     problem.detail ?? res.statusText,
     problem.errors ?? [],
     Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : undefined,
+    problem,
   )
 }
 

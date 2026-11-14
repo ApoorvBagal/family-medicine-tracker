@@ -266,8 +266,9 @@ Base path `/api/v1`. JSON. Session-cookie auth. OpenAPI at `/v3/api-docs`, Swagg
 | GET | `/medicines?q=&status=LOW,OUT&expiring=true&archived=false` | Each item includes `usableQuantity`, `expiredQuantity`, `status`, `nextExpiry` |
 | POST | `/medicines` | Optional `openingStock {quantity, expiryDate}`. **409 `DUPLICATE_MEDICINE`** with `existingId` |
 | GET | `/medicines/{id}` | Includes batches. Response has an `ETag` header |
-| PATCH | `/medicines/{id}` | Requires `If-Match` → 412/409 if stale |
-| POST | `/medicines/{id}/archive` · `/unarchive` | ADMIN |
+| PUT | `/medicines/{id}` | Full replace (v0.2, D14). Requires `If-Match` → 428 if missing, 412 `STALE_VERSION` if stale |
+| POST | `/medicines/{id}/archive` · `/restore` | Owner (v0.2: single owner) |
+| GET | `/medicines/{id}/history` | Audit entries, changed fields as {from, to} |
 | POST / DELETE | `/medicines/{id}/restock-claim` | "I'll buy it" / unclaim |
 
 ### Stock (all require the `Idempotency-Key` header and return the movement plus the updated medicine)

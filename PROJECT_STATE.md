@@ -3,7 +3,7 @@
 _Last updated: 2026-11-14_
 
 ## Current phase
-**M0 — Walking skeleton, deployed: essentially complete (2026-11-14).** Live at https://family-medicine-tracker.onrender.com; push to `main` → CI → automatic deploy → smoke test. Remaining small items: record startup + cold-start times. Next: M1.
+**M2 - Medicines (2026-11-14).** M0 and M1 complete and live at https://family-medicine-tracker.onrender.com (push to `main` → CI → automatic deploy → smoke test). M2 built on branch `m2/medicines`. Small open M0 items: record startup + cold-start times.
 
 ## Decisions
 | ID | Decision | Status |
@@ -70,7 +70,18 @@ _Last updated: 2026-11-14_
 - Server: strict CSP (`'self'` only; the build has no inline scripts/styles), Permissions-Policy, hashed `/assets/**` cached 1 year immutable, everything else `no-cache`, `.webmanifest` → `application/manifest+json`.
 - Tests: `StaticSiteIntegrationTest` (real server on a random port: `/` serves the app with CSP + no-cache, asset cache headers, manifest content type + installability fields, API errors stay JSON).
 - Results: `.\scripts\test-with-neon.ps1` → **33 tests, 0 failures, 0 skipped**, frontend built inside the Maven run. Manual browser test locally against Neon `dev`: wrong setup token → clear message; setup → home; reload → still logged in; logout → login screen; wrong password → message; login → home; no console errors (CSP not blocking anything); phone width + dark mode OK.
-- Not yet verified: installing on a real Android phone (needs the Render deploy + `SETUP_TOKEN`), and the waking screen against a real Render cold start.
+- 2026-11-14 **Deployed** (PR #8, commit 61867bc): CI ✅ → Deploy ✅ (live commit matched). Live checks: `/` 200 with the app, CSP, Permissions-Policy, HSTS, X-Frame-Options DENY, `Cache-Control: no-cache`; hashed JS `max-age=31536000, public, immutable`; manifest `application/manifest+json`; icons `image/png`; `setup-status` true; a deliberately wrong token → `SETUP_TOKEN_INVALID`, so **SETUP_TOKEN is configured on Render**.
+- 2026-11-14 **Owner confirmed on a real Android phone**: production setup completed (home screen shown) and the app **installed** to the home screen (first attempt didn't show the install option; worked after following the Chrome menu steps). **M1 complete.**
+- Previously open, now done: installing on a real Android phone (needs the Render deploy + `SETUP_TOKEN`), and the waking screen against a real Render cold start.
+
+### M2 - Medicines (2026-11-14, branch `m2/medicines`)
+- Flyway **V3**: `medicine` (name, brand, strength, dosage form, unit, `min_threshold`, `daily_dose`, `warn_days` default 5, storage location, notes, `archived_at`, `version`) with a **duplicate guard** (unique per household on name + strength + form, ignoring case and spaces, active medicines only), and `audit_event` (who/what/when, changed fields as JSON).
+- API `/api/v1/medicines`: list (`?q=` name/brand search, `?archived=`), create (201 + Location + ETag), get (ETag), **PUT with required `If-Match`** (412 `STALE_VERSION` / 428 `IF_MATCH_REQUIRED`), `archive`, `restore`, `history`. Duplicates -> 409 `DUPLICATE_MEDICINE` with `existingId`. All queries household-scoped from the session (other households' ids -> 404). Spring's own errors now also carry a `code`. OpenAPI JSON at `/v3/api-docs` (springdoc 3.2.0, behind login).
+- Decisions: **D13** JdbcClient instead of JPA (explicit SQL, precise locking for M3); **D14** PUT (full replace) instead of PATCH; **D15** OpenAPI JSON only, no Swagger UI (strict CSP would block its inline styles).
+- UI: medicine list (search, archived toggle, empty state), add/edit form ("taken every day" -> daily dose + warn days; "only sometimes" -> warn-below threshold; unit follows form), duplicate message with "Open the existing one", stale-edit message with "Reload latest", archive/restore, change history with friendly field names.
+- Tests: `MedicineIntegrationTest` (12: create/get/ETag, duplicate variants, validation, stale If-Match, no-op update, update-into-duplicate, archive/restore/duplicate-on-restore, search incl. literal `%`, history, **another household can't see/edit/archive/read history**, 401, OpenAPI behind login). Each test class now gets its own schema.
+- Bugs caught while building (all by tests): JdbcClient can't mix `.param` with a parameter source; Java text blocks drop trailing spaces (the SQL keyword `returning` ran into the column list); audit `changes` came back as a JSON string (now a JSON object).
+- Results: `.\scripts\test-with-neon.ps1` -> **45 tests, 0 failures, 0 skipped**. Manual browser test against Neon `dev`: still logged in after a server restart; empty state; added Metformin 500 mg (2/day); duplicate "metformin 500MG" caught with "Open the existing one"; edited dose 2 -> 3, "Saved."; history shows the change; network log shows only the deliberate 409.
 
 ## Tooling installed (2026-11-14)
 - Neon CLI `neon@9.5.0` (global npm, installed by owner), signed in.

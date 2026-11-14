@@ -39,6 +39,30 @@ public class Browser {
         return perform(MockMvcRequestBuilders.post(path).contentType(MediaType.APPLICATION_JSON).content(json), true);
     }
 
+    /** PUT with the CSRF header and an optional If-Match (optimistic locking). */
+    public ResponseActionsWithEtag put(String path, String json, String ifMatch) throws Exception {
+        if (!cookies.containsKey("XSRF-TOKEN")) {
+            get("/api/v1/auth/csrf");
+        }
+        MockHttpServletRequestBuilder request = MockMvcRequestBuilders.put(path)
+                .contentType(MediaType.APPLICATION_JSON).content(json);
+        if (ifMatch != null) {
+            request.header("If-Match", ifMatch);
+        }
+        return new ResponseActionsWithEtag(perform(request, true));
+    }
+
+    /** Small wrapper so tests can read the ETag of a response. */
+    public record ResponseActionsWithEtag(ResultActions actions) {
+        public ResultActions andExpect(org.springframework.test.web.servlet.ResultMatcher m) throws Exception {
+            return actions.andExpect(m);
+        }
+
+        public String etag() {
+            return actions.andReturn().getResponse().getHeader("ETag");
+        }
+    }
+
     /** POST without a CSRF header: what a malicious cross-site form could send. */
     public ResultActions postWithoutCsrf(String path, String json) throws Exception {
         return perform(MockMvcRequestBuilders.post(path).contentType(MediaType.APPLICATION_JSON).content(json), false);

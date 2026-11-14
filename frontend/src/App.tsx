@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { api, ApiError, type Me } from './api'
+import { messageFor } from './messages'
+import { MedicinesScreen } from './MedicinesScreen'
 
 type Screen =
   | { kind: 'starting'; waking: boolean }
@@ -12,44 +14,6 @@ const WAKING_HINT_AFTER_MS = 2500
 const GIVE_UP_AFTER_MS = 120_000
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
-
-/** Friendly text for the API's stable error codes. */
-function messageFor(error: unknown): string {
-  if (!(error instanceof ApiError)) return 'Something went wrong. Please try again.'
-  switch (error.code) {
-    case 'INVALID_CREDENTIALS':
-      return 'Email or password is incorrect.'
-    case 'TOO_MANY_ATTEMPTS': {
-      const minutes = Math.max(1, Math.ceil((error.retryAfterSeconds ?? 900) / 60))
-      return `Too many failed attempts. Try again in about ${minutes} minute${minutes === 1 ? '' : 's'}.`
-    }
-    case 'SETUP_TOKEN_INVALID':
-      return 'The setup token is wrong. Copy it again from your password manager.'
-    case 'SETUP_DISABLED':
-      return 'Setup is switched off on the server: SETUP_TOKEN is not set on Render.'
-    case 'SETUP_ALREADY_COMPLETED':
-      return 'Setup was already completed. Please log in.'
-    case 'PASSWORD_TOO_LONG':
-      return 'That password is too long.'
-    case 'VALIDATION_FAILED':
-      return error.fieldErrors.map((f) => `${labelFor(f.field)} ${f.message}`).join('. ') || error.message
-    case 'NETWORK':
-      return 'Cannot reach the server. Check your internet connection.'
-    default:
-      return error.retryable ? 'The server is starting up. Please try again in a moment.' : error.message
-  }
-}
-
-function labelFor(field: string): string {
-  const labels: Record<string, string> = {
-    setupToken: 'Setup token',
-    householdName: 'Household name',
-    displayName: 'Your name',
-    email: 'Email',
-    password: 'Password',
-  }
-  return labels[field] ?? field
-}
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>({ kind: 'starting', waking: false })
@@ -303,10 +267,7 @@ function HomeScreen({ me, onLoggedOut }: { me: Me; onLoggedOut: () => void }) {
   return (
     <Page title={`Hello, ${me.user.displayName}`}>
       <p className="muted">{me.household.name}</p>
-      <section className="card">
-        <h2>Medicines</h2>
-        <p>Your medicine list arrives in the next milestone.</p>
-      </section>
+      <MedicinesScreen />
       <ErrorBox error={error} />
       <button className="secondary" onClick={() => void logout()}>
         Log out
