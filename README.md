@@ -41,7 +41,21 @@ always run (against Postgres 18 in Docker on GitHub's runners) and are never ski
 
 All settings come from environment variables; nothing secret is committed. Database connection order:
 `DB_URL`/`DB_USER`/`DB_PASSWORD` if set, else Neon's `DATABASE_URL_UNPOOLED` (env var, or `.env.local`).
-Production (Render) sets `SPRING_PROFILES_ACTIVE=prod` and `DATABASE_URL_UNPOOLED`.
+Production (Render) sets `SPRING_PROFILES_ACTIVE=prod`, `DATABASE_URL_UNPOOLED` and, until the owner
+account exists, `SETUP_TOKEN` (one-time secret for `POST /api/v1/auth/setup`; setup is refused without it,
+and permanently once done).
+
+## API (so far)
+
+| Method | Path | Auth |
+|---|---|---|
+| GET | `/api/v1/auth/setup-status` | public |
+| GET | `/api/v1/auth/csrf` | public: sets the `XSRF-TOKEN` cookie; send it back as `X-XSRF-TOKEN` on writes |
+| POST | `/api/v1/auth/setup` | public + `SETUP_TOKEN`, once |
+| POST | `/api/v1/auth/login` / `logout` | public / logged in |
+| GET | `/api/v1/auth/me` | logged in |
+
+Errors are `application/problem+json` with a stable `code` (e.g. `INVALID_CREDENTIALS`, `TOO_MANY_ATTEMPTS`).
 
 ## Deploy
 
