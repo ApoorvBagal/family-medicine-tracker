@@ -3,7 +3,7 @@
 _Last updated: 2026-11-14_
 
 ## Current phase
-**M5 - Low-stock alerts (2026-11-14).** M0 and M1 complete and live at https://family-medicine-tracker.onrender.com (push to `main` → CI → automatic deploy → smoke test). M2 and M3 (stock) live. **M5 (alerts) built on branch `m5/alerts`**; M4 (password reset etc.) comes after. Small open M0 items: record startup + cold-start times.
+**M5 - Low-stock alerts (2026-11-14).** M0 and M1 complete and live at https://family-medicine-tracker.onrender.com (push to `main` → CI → automatic deploy → smoke test). M2 and M3 (stock) live. **M5 (alerts) live**; M4 (password reset etc.) comes after. Small open M0 items: record startup + cold-start times.
 
 ## Decisions
 | ID | Decision | Status |
@@ -104,6 +104,8 @@ _Last updated: 2026-11-14_
 - `.github/workflows/daily.yml`: cron 02:30 UTC (08:00 IST) + manual button; retries while Render wakes; fails on token mismatch or job errors.
 - UI: "Alert emails" section (people, add/remove, test email, last daily check, warning when sending is off), LOW badge in the list, low/run-out warning + estimate note on the stock panel, `/?unsubscribe=<token>` page with a confirm button.
 - Tests: `RunwayTest` (6), `AlertIntegrationTest` (11: 5 days -> one LOW email then Restocked; email text + owner without unsubscribe link; daily job estimates unlogged doses, idempotent re-run, OUT, ledger untouched; hovering suppressed; min threshold; no alerts before first entry / archived; failed send kept + retried; recipients + own unsubscribe link, GET doesn't unsubscribe, POST without login works, unsubscribed gets nothing, other household 404; job token 401/200 + status; login required; test email + rate limit). Full suite **79 tests, 0 failures** (`.\scripts\test-with-neon.ps1`). Browser check on `dev`: list shows estimate, recipient added, test email logged for owner + recipient, unsubscribe page shows the invalid-link message.
+- Production (merge `e01b480`, PR #11): CI + Deploy green; live `app.commit` = `e01b480`; alert endpoints 401 without login; `/internal/jobs/daily` 401 without token (so `JOB_TOKEN` is set); other `/internal/**` 403; bad unsubscribe token 404 `UNSUBSCRIBE_LINK_INVALID`. Brevo sender verified (warnings: Brevo DKIM, freemail DMARC -> spam risk, R7).
+- Owner confirmed (2026-11-14): test email arrived via Brevo; manual **Daily check** workflow run succeeded.
 - **To switch on in production** (owner): Brevo account + verified Gmail sender + API key; on Render set `EMAIL_PROVIDER=brevo`, `BREVO_API_KEY`, `EMAIL_FROM`, `APP_BASE_URL=https://family-medicine-tracker.onrender.com`, `JOB_TOKEN`; GitHub secret `JOB_TOKEN` (same value).
 
 ## Tooling installed (2026-11-14)
