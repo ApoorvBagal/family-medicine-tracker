@@ -90,17 +90,18 @@ export function StockPanel({ medicine }: { medicine: Medicine }) {
   return (
     <section className="stock card">
       <p className="big-number">
-        {formatQty(stock.usableQuantity)} <span>{unit}</span>
+        {estimating && '~'}
+        {formatQty(estimating ? stock.estimatedQuantity : stock.usableQuantity)} <span>{unit}</span>
       </p>
       <p className="muted">
-        usable
+        {estimating ? 'left (estimated)' : 'usable'}
         {daysLeft !== null && ` · about ${daysLeft} day${daysLeft === 1 ? '' : 's'} at ${formatQty(medicine.dailyDose!)} a day`}
         {stock.nextExpiry && ` · next expiry ${formatExpiry(stock.nextExpiry).replace('exp ', '')}`}
       </p>
       {estimating && (
         <p className="muted small">
-          Estimated {formatQty(stock.estimatedQuantity)} {unit} now, counting {formatQty(medicine.dailyDose ?? 0)} a
-          day since the last entry. Log doses or recount to correct it.
+          Last entry: {formatQty(stock.usableQuantity)} {unit}. Counting {formatQty(medicine.dailyDose ?? 0)} a day
+          since then. Log doses or recount to correct it.
         </p>
       )}
       {stock.alertStatus !== 'OK' && stock.usableQuantity > 0 && (
