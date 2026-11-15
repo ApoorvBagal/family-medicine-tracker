@@ -105,7 +105,10 @@ function MedicineList({ onAdd, onOpen }: { onAdd: () => void; onOpen: (id: strin
                 {[m.brandName, m.storageLocation].filter(Boolean).join(' · ') || ' '}
               </span>
               <span className="stock-line">
-                {formatNumber(m.usableQuantity)} {UNITS[m.unit]} left
+                {m.estimatedQuantity != null && m.estimatedQuantity < m.usableQuantity
+                  ? `~${formatNumber(m.estimatedQuantity)}`
+                  : formatNumber(m.usableQuantity)}{' '}
+                {UNITS[m.unit]} left
                 {m.daysLeft !== null && m.usableQuantity > 0 ? ` · about ${m.daysLeft} days` : ''}
                 {m.alertStatus === 'LOW' && <strong className="badge"> · LOW</strong>}
                 {m.alertStatus === 'OUT' && m.usableQuantity > 0 && <strong className="badge"> · run out?</strong>}
